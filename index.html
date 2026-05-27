@@ -171,52 +171,56 @@ function loadRegion(region) {
     if (loading || loadedRegion === region) return;
     loading = true; loadedRegion = region; allData = []; filtered = []; currentPage = 1;
     controlsBar.style.display = 'none'; pagination.style.display = 'none';
-    tableWrap.innerHTML = `<div class="state-box"><div class="dot"></div><div class="dot"></div><div class="dot"></div><p style="margin-top:14px;font-size:13px">loading ${region.toUpperCase()} data…</p></div>`;
-    filterInput.value = '';
+    tableWrap.innerHTML = `<div class="state-box">Loading ${region.toUpperCase()} data...</div>`;
 
     fetch(`data-${region}.json`)
-    .then(r => { if (!r.ok) throw new Error('HTTP '+r.status); return r.text(); })
+    .then(r => r.text())
     .then(rawText => {
         let data = [];
-        // Czytamy plik linijka po linijce, aby uniknąć błędu "Unexpected end of JSON input"
-        let lines = rawText.split('\n');
-        lines.forEach(line => {
-            let cleanLine = line.trim();
-            // Usuwamy potencjalne nawiasy tablicy [ ] oraz przecinki z końca linii
-            cleanLine = cleanLine.replace(/^\[|\]$|,$/g, '').trim();
-            if (cleanLine) {
-                try {
-                    data.push(JSON.parse(cleanLine));
-                } catch(err) { /* Ignorujemy puste lub błędne linie */ }
+        let cleanText = rawText.trim();
+
+        // 1. Sprawdzamy czy to standardowa tablica JSON
+        if (cleanText.startsWith('[')) {
+            try {
+                data = JSON.parse(cleanText);
+            } catch (e) {
+                // Jeśli parsowanie całej tablicy zawiedzie, spróbuj metody linijkowej
+                data = fallbackParse(cleanText);
             }
-        });
+        } else {
+            // 2. Jeśli nie zaczyna się od [, traktuj jako NDJSON
+            data = fallbackParse(cleanText);
+        }
 
-        if (data.length === 0) throw new Error("Parsed 0 structures. Verification failed.");
+        if (!Array.isArray(data) || data.length === 0) throw new Error("No data found");
 
-        // Dalsza część Twojej oryginalnej logiki:
+        // Przetwarzanie (taka sama logika dla obu przypadków)
         data.forEach(d => {
-            let parsedH = parseFloat(d.h);
-            d.h = (isNaN(parsedH) || parsedH <= 0 || (parsedH > 500 && String(d.t).toUpperCase().includes('CABLE'))) ? null : parsedH;
+            d.h = parseFloat(d.h) || null;
             d.t = d.t ? String(d.t).trim().toUpperCase() : 'OTHER';
-            if (region === 'europe') {
-                d.state = guessEuropeCountry(d.lat, d.lng);
-                d.city = d.city || '—';
-            } else {
-                d.state = d.state || 'Unknown';
-                d.city = d.city || '—';
-            }
+            d.state = region === 'europe' ? guessEuropeCountry(d.lat, d.lng) : (d.state || 'Unknown');
+            d.city = d.city || '—';
         });
 
-        allData = data; 
+        allData = data;
         loading = false;
-        applyFilters(); 
+        applyFilters();
         controlsBar.style.display = 'flex';
     })
     .catch(err => {
-        loading = false; 
-        loadedRegion = null;
-        tableWrap.innerHTML = `<div class="state-box">failed to load data.<br><small style="color:#555">${err.message}</small></div>`;
+        loading = false;
+        tableWrap.innerHTML = `<div class="state-box">Failed to load: ${err.message}</div>`;
     });
+}
+
+// Pomocniczy parser dla brudnych danych
+function fallbackParse(text) {
+    let result = [];
+    text.split('\n').forEach(line => {
+        let clean = line.trim().replace(/^\[|\]$|,$/g, '');
+        if (clean) try { result.push(JSON.parse(clean)); } catch(e) {}
+    });
+    return result;
 }
 
 function applyFilters() {
