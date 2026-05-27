@@ -213,12 +213,26 @@ async function loadRegion(region) {
         let data = arrays.flat();
 		console.log(data[0]);
 
-        data.forEach(d => {
-    d.h = parseFloat(d.h) || null;
-    d.t = d.t ? String(d.t).trim().toUpperCase() : 'OTHER';
+data.forEach(d => {
+
+    // POPRAWNE POLA Z GEOJSON
+    d.n = d.n || d.name || '—';
+
+    d.t = (
+        d.t ||
+        d.obstacleType ||
+        d.type ||
+        'OTHER'
+    ).toString().trim().toUpperCase();
+
+    d.h = parseFloat(
+        d.h ||
+        d.maxHeightAGL ||
+        0
+    ) || null;
 
     d.state = region === 'europe'
-        ? (d.country || 'Unknown')
+        ? (d.country || d.state || 'Unknown')
         : (d.state || 'Unknown');
 
     d.city = d.city || '—';
@@ -230,6 +244,9 @@ data = data.filter(d => {
     const h = parseFloat(d.h);
 
     if (!h || isNaN(h)) return false;
+
+    // WYWAL LINIE ENERGETYCZNE
+    if (d.t === 'TRANSMISSION_LINE') return false;
 
     // absurdalne wysokości
     if (h > 800) return false;
