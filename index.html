@@ -211,6 +211,7 @@ async function loadRegion(region) {
         );
 
         let data = arrays.flat();
+		console.log(data[0]);
 
         data.forEach(d => {
     d.h = parseFloat(d.h) || null;
