@@ -138,12 +138,19 @@ function showPage(id) {
     if (!isShowing) { targetPage.classList.add('active'); if (targetBtn) targetBtn.classList.add('active-btn'); }
 }
 
+// ── Super Precyzyjne i wąskie granice państw (Polska i Czechy już się NIE nakładają) ──
 function guessEuropeCountry(lat, lng) {
     if (lat === null || lng === null) return 'Other Europe';
-    if (lat >= 48.5 && lat <= 51.1 && lng >= 12.0 && lng <= 18.9) return 'Czech Republic';
+    
+    // Czechy - ścisłe i pewne koordynaty
+    if (lat >= 48.55 && lat <= 51.05 && lng >= 12.05 && lng <= 18.85) return 'Czech Republic';
+    // Polska - przesunięta granica dolna, aby nie zabierać Czech
+    if (lat >= 51.06 && lat <= 54.90 && lng >= 14.10 && lng <= 24.15) return 'Poland';
+    if (lat >= 49.00 && lat < 51.06 && lng >= 18.86 && lng <= 24.15) return 'Poland'; // Śląsk/Małopolska/Podkarpacie
+    
+    // Pozostałe kraje
     if (lat >= 45.4 && lat <= 46.9 && lng >= 13.3 && lng <= 16.6) return 'Slovenia';
-    if (lat >= 49.0 && lat <= 54.9 && lng >= 14.1 && lng <= 24.2) return 'Poland';
-    if (lat >= 47.2 && lat <= 55.1 && lng >= 5.8 && lng <= 15.1) return 'Germany';
+    if (lat >= 47.2 && lat <= 55.1 && lng >= 5.8 && lng <= 15.0) return 'Germany';
     if (lat >= 47.7 && lat <= 49.6 && lng >= 16.8 && lng <= 22.6) return 'Slovakia';
     if (lat >= 42.3 && lat <= 51.1 && lng >= -4.8 && lng <= 8.3) return 'France';
     if (lat >= 35.5 && lat <= 47.1 && lng >= 6.5 && lng <= 18.6) return 'Italy';
@@ -157,6 +164,25 @@ function guessEuropeCountry(lat, lng) {
     if (lat >= 59.7 && lat <= 70.2 && lng >= 20.5 && lng <= 31.7) return 'Finland';
     if (lat >= 46.2 && lat <= 49.1 && lng >= 9.4 && lng <= 17.3) return 'Austria';
     return 'Other Europe';
+}
+
+// ── Elastyczna, potężna normalizacja typów bezpośrednio w przeglądarce ──
+function normalizeTypeOnTheFly(rawT, rawN) {
+    const t = String(rawT || '').trim().toUpperCase();
+    const n = String(rawN || '').trim().toUpperCase();
+    const txt = `${t} ${n}`;
+
+    // Szukamy uniwersalnych wzorców po angielsku (z uMap) i po polsku (z ULC)
+    if (txt.includes('CHIMNEY') || txt.includes('KOMIN')) return 'CHIMNEY';
+    if (txt.includes('WINDMILL') || txt.includes('TURBINE') || txt.includes('WIATRAK') || txt.includes('WIND')) return 'WIND TURBINE';
+    if (txt.includes('MAST') || txt.includes('MASZT')) return 'MAST';
+    if (txt.includes('CRANE') || txt.includes('ŻURAW') || txt.includes('DŹWIG')) return 'CRANE';
+    if (txt.includes('COOLING') || txt.includes('CHŁODNIA') || txt.includes('CHLODNIA')) return 'COOLING TOWER';
+    if (txt.includes('BUILDING') || txt.includes('BUDYNEK')) return 'BUILDING';
+    if (txt.includes('TOWER') || txt.includes('WIEŻA') || txt.includes('WIEZA')) return 'TOWER';
+    if (txt.includes('POLE') || txt.includes('TRANSMISSION') || txt.includes('LINE') || txt.includes('SŁUP') || txt.includes('SLUP')) return 'TRANSMISSION LINE / POLE';
+
+    return 'OTHER';
 }
 
 let allData = []; let filtered = []; let sortCol = 'h'; let sortDir = -1; let currentPage = 1; const PAGE_SIZE = 250; let loadedRegion = null; let loading = false;
@@ -178,10 +204,16 @@ function loadRegion(region) {
 
     fetch(`data-${region}.json`).then(r => { if (!r.ok) throw new Error('HTTP '+r.status); return r.json(); }).then(data => {
         data.forEach(d => {
-            // Unifikujemy wielkość liter typów z bazy danych
-            d.t = d.t ? String(d.t).trim().toUpperCase() : 'OTHER';
-            if (region === 'europe') { d.state = guessEuropeCountry(d.lat, d.lng); d.city = d.city || '—'; }
-            else { d.state = d.state || 'Unknown'; d.city = d.city || '—'; }
+            // Inteligentna zamiana typów na bieżąco, bez niszczenia pliku źródłowego
+            d.t = normalizeTypeOnTheFly(d.t, d.n);
+            
+            if (region === 'europe') { 
+                d.state = guessEuropeCountry(d.lat, d.lng); 
+                d.city = d.city || '—'; 
+            } else { 
+                d.state = d.state || 'Unknown'; 
+                d.city = d.city || '—'; 
+            }
         });
         allData = data; loading = false;
         
@@ -195,6 +227,7 @@ function loadRegion(region) {
             subregionFilter.innerHTML = '<option value="">all states</option>' + states.map(s => `<option value="${s}">${s}</option>`).join('');
         }
 
+        // Budujemy czystą listę typów
         const uniqueTypes = [...new Set(data.map(d => d.t).filter(Boolean))].sort();
         typeFilter.innerHTML = '<option value="">all types</option>' + uniqueTypes.map(t => `<option value="${t}">${t}</option>`).join('');
             
@@ -215,7 +248,7 @@ function applyFilters() {
         const nameMatch = !q || (d.n || '').toLowerCase().includes(q) || (d.city || '').toLowerCase().includes(q);
         const typeMatch = !t || String(d.t).toUpperCase() === t;
         const subMatch = !sub || d.state === sub;
-        if (hideLines && (d.t === 'TRANSMISSION LINE / POLE' || d.t === 'TRANSMISSION_LINE' || d.t === 'POLE')) return false;
+        if (hideLines && d.t === 'TRANSMISSION LINE / POLE') return false;
         return nameMatch && typeMatch && subMatch;
     });
     sortData();
