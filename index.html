@@ -182,6 +182,7 @@ function normalizeTypeOnTheFly(rawT, rawN) {
     if (txt.includes('TOWER') || txt.includes('WIEŻA') || txt.includes('WIEZA')) return 'TOWER';
     if (txt.includes('POLE') || txt.includes('TRANSMISSION') || txt.includes('LINE') || txt.includes('SŁUP') || txt.includes('SLUP')) return 'TRANSMISSION LINE / POLE';
 
+    if (txt.includes('CABLE') || txt.includes('CABLEWAY') || txt.includes('ROPEWAY') || txt.includes('CATENARY')) return 'CABLE / ROPEWAY';
     return 'OTHER';
 }
 
@@ -248,7 +249,7 @@ function applyFilters() {
         const nameMatch = !q || (d.n || '').toLowerCase().includes(q) || (d.city || '').toLowerCase().includes(q);
         const typeMatch = !t || String(d.t).toUpperCase() === t;
         const subMatch = !sub || d.state === sub;
-        if (hideLines && d.t === 'TRANSMISSION LINE / POLE') return false;
+        if (hideLines && (d.t === 'TRANSMISSION LINE / POLE' || d.t === 'CABLE / ROPEWAY')) return false;
         return nameMatch && typeMatch && subMatch;
     });
     sortData();
