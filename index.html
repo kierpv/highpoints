@@ -170,34 +170,41 @@ document.querySelectorAll('.country-btn').forEach(btn => {
 function loadRegion(region) {
     if (loading || loadedRegion === region) return;
     loading = true; loadedRegion = region; allData = []; filtered = []; currentPage = 1;
-    controlsBar.style.display = 'none'; pagination.style.display = 'none';
     tableWrap.innerHTML = `<div class="state-box">Ładowanie ${region.toUpperCase()}...</div>`;
 
     fetch(`data-${region}.json`)
-    .then(r => r.json()) // Pobieramy i parsujemy jako gotowy obiekt
-    .then(data => {
-        // Logika przetwarzania
-        data.forEach(d => {
-            d.h = parseFloat(d.h) || null;
-            d.t = d.t ? String(d.t).trim().toUpperCase() : 'OTHER';
-            if (region === 'europe') {
-                d.state = guessEuropeCountry(d.lat, d.lng);
+    .then(r => {
+        if (!r.ok) throw new Error("HTTP Error " + r.status);
+        return r.text(); // Pobieramy jako tekst, żeby zobaczyć co tam siedzi
+    })
+    .then(text => {
+        console.log("Pobrano plik dla " + region + ", długość znaków:", text.length);
+        try {
+            // Spróbujmy sparsować tekst
+            const data = JSON.parse(text);
+            if (!Array.isArray(data)) throw new Error("Plik nie jest tablicą JSON");
+            
+            // Przetwarzanie
+            data.forEach(d => {
+                d.h = parseFloat(d.h) || null;
+                d.t = d.t ? String(d.t).trim().toUpperCase() : 'OTHER';
+                d.state = region === 'europe' ? guessEuropeCountry(d.lat, d.lng) : (d.state || 'Unknown');
                 d.city = d.city || '—';
-            } else {
-                d.state = d.state || 'Unknown';
-                d.city = d.city || '—';
-            }
-        });
+            });
 
-        allData = data;
-        loading = false;
-        applyFilters();
-        controlsBar.style.display = 'flex';
+            allData = data;
+            loading = false;
+            applyFilters();
+            controlsBar.style.display = 'flex';
+        } catch (e) {
+            console.error("BŁĄD PARSOWANIA DLA " + region + ":", e);
+            console.error("Fragment pliku (pierwsze 100 znaków):", text.substring(0, 100));
+            throw new Error("Błąd formatu JSON. Sprawdź konsolę F12!");
+        }
     })
     .catch(err => {
         loading = false;
-        console.error("Błąd ładowania:", err);
-        tableWrap.innerHTML = `<div class="state-box">Błąd: ${err.message}. Sprawdź konsolę (F12).</div>`;
+        tableWrap.innerHTML = `<div class="state-box">Failed to load: ${err.message}</div>`;
     });
 }
 
