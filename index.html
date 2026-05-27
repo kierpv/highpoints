@@ -141,14 +141,14 @@ function showPage(id) {
 function guessEuropeCountry(lat, lng) {
     if (lat === null || lng === null) return 'Other Europe';
     
-    // Czech Republic - ścisłe koordynaty
+    // Czech Republic
     if (lat >= 48.55 && lat <= 51.05 && lng >= 12.05 && lng <= 18.85) return 'Czech Republic';
     
-    // Poland - odizolowane, aby nie nachodziły na Czechy
+    // Poland
     if (lat >= 51.06 && lat <= 54.90 && lng >= 14.10 && lng <= 24.15) return 'Poland';
     if (lat >= 49.00 && lat < 51.06 && lng >= 18.86 && lng <= 24.15) return 'Poland';
     
-    // Reszta Europy
+    // Pozostałe kraje
     if (lat >= 45.4 && lat <= 46.9 && lng >= 13.3 && lng <= 16.6) return 'Slovenia';
     if (lat >= 47.2 && lat <= 55.1 && lng >= 5.8 && lng <= 15.0) return 'Germany';
     if (lat >= 47.7 && lat <= 49.6 && lng >= 16.8 && lng <= 22.6) return 'Slovakia';
@@ -174,13 +174,38 @@ function loadRegion(region) {
     tableWrap.innerHTML = `<div class="state-box"><div class="dot"></div><div class="dot"></div><div class="dot"></div><p style="margin-top:14px;font-size:13px">loading ${region.toUpperCase()} data…</p></div>`;
     filterInput.value = '';
 
-    // Bezpieczne wczytywanie dużych plików za pomocą tekstowego strumienia
-    fetch(`data-${region}.json`).then(r => { if (!r.ok) throw new Error('HTTP '+r.status); return r.text(); }).then(rawText => {
-        let data = JSON.parse(rawText);
+    fetch(`data-${region}.json`)
+    .then(r => { if (!r.ok) throw new Error('HTTP '+r.status); return r.text(); })
+    .then(rawText => {
+        let data = [];
+        // Przetwarzanie linii wygenerowanych przez PowerShell
+        let lines = rawText.split('\n');
         
-        // Czyszczenie danych i naprawa błędnych rekordów (np. Francja Cable car > 500m)
+        lines.forEach(line => {
+            let cleanLine = line.trim();
+            if (!cleanLine) return;
+            
+            // Czyszczenie znaków ustrukturyzowanych (np. nawiasy tablicy na początku/końcu pliku)
+            if (cleanLine.startsWith('[')) cleanLine = cleanLine.substring(1);
+            if (cleanLine.endsWith(']')) cleanLine = cleanLine.substring(0, cleanLine.length - 1);
+            if (cleanLine.endsWith(',')) cleanLine = cleanLine.substring(0, cleanLine.length - 1);
+            
+            cleanLine = cleanLine.trim();
+            if (!cleanLine) return;
+            
+            try {
+                data.push(JSON.parse(cleanLine));
+            } catch(err) {
+                // Ignoruj błędne/ucięte wpisy
+            }
+        });
+
+        if (data.length === 0) throw new Error("Parsed 0 structures. Verification failed.");
+
+        // Przetwarzanie obiektów po udanym sparsowaniu
         data.forEach(d => {
             let parsedH = parseFloat(d.h);
+            // Wykluczenie błędnej wysokości francuskiej kolejki linowej (>500m)
             if (isNaN(parsedH) || parsedH <= 0 || (parsedH > 500 && String(d.t).toUpperCase().includes('CABLE'))) {
                 d.h = null; 
             } else {
@@ -214,7 +239,8 @@ function loadRegion(region) {
         typeFilter.innerHTML = '<option value="">all types</option>' + uniqueTypes.map(t => `<option value="${t}">${t}</option>`).join('');
             
         applyFilters(); controlsBar.style.display = 'flex';
-    }).catch(err => {
+    })
+    .catch(err => {
         loading = false; loadedRegion = null;
         tableWrap.innerHTML = `<div class="state-box">failed to load data.<br><small style="color:#555">${err.message}</small></div>`;
     });
@@ -227,7 +253,7 @@ function applyFilters() {
     const hideLines = hideLinesCheck.checked;
 
     filtered = allData.filter(d => {
-        // Ukrywamy całkowicie puste rekordy z UK/Słowenii (gdzie nazwa jest pusta i brak wysokości)
+        // Ukrywanie rekordów bez nazwy i bez wysokości (czyści puste linie dla UK/Słowenii)
         if ((d.h === null || d.h === undefined) && (!d.n || d.n.trim() === "")) return false;
 
         const nameMatch = !q || (d.n || '').toLowerCase().includes(q) || (d.city || '').toLowerCase().includes(q);
