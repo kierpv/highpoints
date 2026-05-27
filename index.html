@@ -187,10 +187,10 @@ async function loadRegion(region) {
 
         if (region === 'europe') {
             files = [
-                'data/europe-1.json',
-                'data/europe-2.json',
-                'data/europe-3.json',
-                'data/europe-4.json'
+                'data/europe-1-fixed.json',
+                'data/europe-2-fixed.json',
+                'data/europe-3-fixed.json',
+                'data/europe-4-fixed.json'
             ];
         } else {
             files = [`data-${region}.json`];
@@ -213,15 +213,27 @@ async function loadRegion(region) {
         const data = arrays.flat();
 
         data.forEach(d => {
-            d.h = parseFloat(d.h) || null;
-            d.t = d.t ? String(d.t).trim().toUpperCase() : 'OTHER';
-            d.state = region === 'europe'
-                ? guessEuropeCountry(d.lat, d.lng)
-                : (d.state || 'Unknown');
-            d.city = d.city || '—';
+    d.h = parseFloat(d.h) || null;
+    d.t = d.t ? String(d.t).trim().toUpperCase() : 'OTHER';
+
+    d.state = region === 'europe'
+        ? (d.country || 'Unknown')
+        : (d.state || 'Unknown');
+
+    d.city = d.city || '—';
         });
 
-        allData = data;
+allData = data.filter(d => {
+
+    if (!d.h || d.h < 15 || d.h > 450) return false;
+
+    if (
+        d.t.includes('TRANSMISSION') ||
+        d.t.includes('POLE')
+    ) return false;
+
+    return true;
+});
 
         loading = false;
 
