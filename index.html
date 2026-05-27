@@ -178,53 +178,26 @@ function loadRegion(region) {
     .then(r => { if (!r.ok) throw new Error('HTTP '+r.status); return r.text(); })
     .then(rawText => {
         let data = [];
-        let cleanText = rawText.trim();
-
-        // Inteligentny hybrydowy parser: sprawdza czy tekst jest standardową tablicą JSON
-        if (cleanText.startsWith('[') && cleanText.endsWith(']')) {
-            try {
-                // Jeśli plik to standardowy JSON, parsujemy go bezpośrednio
-                data = JSON.parse(cleanText);
-            } catch(e) {
-                // Jeśli bezpośrednie parsowanie zawiodło (np. ucięty plik), przechodzimy do odczytu linii
-            }
-        }
-
-        // Jeśli tablica nadal jest pusta, przetwarzamy plik jako strukturę wielolinijkową
-        if (data.length === 0) {
-            let lines = cleanText.split('\n');
-            lines.forEach(line => {
-                let cleanLine = line.trim();
-                if (!cleanLine) return;
-                
-                // Usuwanie ewentualnych śmieciowych znaków składniowych tablicy na początku/końcu linii
-                if (cleanLine.startsWith('[')) cleanLine = cleanLine.substring(1);
-                if (cleanLine.endsWith(']')) cleanLine = cleanLine.substring(0, cleanLine.length - 1);
-                if (cleanLine.endsWith(',')) cleanLine = cleanLine.substring(0, cleanLine.length - 1);
-                
-                cleanLine = cleanLine.trim();
-                if (!cleanLine) return;
-                
+        // Czytamy plik linijka po linijce, aby uniknąć błędu "Unexpected end of JSON input"
+        let lines = rawText.split('\n');
+        lines.forEach(line => {
+            let cleanLine = line.trim();
+            // Usuwamy potencjalne nawiasy tablicy [ ] oraz przecinki z końca linii
+            cleanLine = cleanLine.replace(/^\[|\]$|,$/g, '').trim();
+            if (cleanLine) {
                 try {
                     data.push(JSON.parse(cleanLine));
-                } catch(err) {
-                    // Pomijanie uszkodzonych rzędów składniowych
-                }
-            });
-        }
+                } catch(err) { /* Ignorujemy puste lub błędne linie */ }
+            }
+        });
 
         if (data.length === 0) throw new Error("Parsed 0 structures. Verification failed.");
 
+        // Dalsza część Twojej oryginalnej logiki:
         data.forEach(d => {
             let parsedH = parseFloat(d.h);
-            if (isNaN(parsedH) || parsedH <= 0 || (parsedH > 500 && String(d.t).toUpperCase().includes('CABLE'))) {
-                d.h = null; 
-            } else {
-                d.h = parsedH;
-            }
-
+            d.h = (isNaN(parsedH) || parsedH <= 0 || (parsedH > 500 && String(d.t).toUpperCase().includes('CABLE'))) ? null : parsedH;
             d.t = d.t ? String(d.t).trim().toUpperCase() : 'OTHER';
-            
             if (region === 'europe') {
                 d.state = guessEuropeCountry(d.lat, d.lng);
                 d.city = d.city || '—';
@@ -234,25 +207,14 @@ function loadRegion(region) {
             }
         });
 
-        allData = data; loading = false;
-        
-        if (region === 'europe') {
-            subregionLabel.textContent = 'country:';
-            const countries = [...new Set(data.map(d => d.state).filter(Boolean))].sort();
-            subregionFilter.innerHTML = '<option value="">all countries</option>' + countries.map(c => `<option value="${c}">${c}</option>`).join('');
-        } else {
-            subregionLabel.textContent = 'state:';
-            const states = [...new Set(data.map(d => d.state).filter(Boolean))].sort();
-            subregionFilter.innerHTML = '<option value="">all states</option>' + states.map(s => `<option value="${s}">${s}</option>`).join('');
-        }
-
-        const uniqueTypes = [...new Set(data.map(d => d.t).filter(Boolean))].sort();
-        typeFilter.innerHTML = '<option value="">all types</option>' + uniqueTypes.map(t => `<option value="${t}">${t}</option>`).join('');
-            
-        applyFilters(); controlsBar.style.display = 'flex';
+        allData = data; 
+        loading = false;
+        applyFilters(); 
+        controlsBar.style.display = 'flex';
     })
     .catch(err => {
-        loading = false; loadedRegion = null;
+        loading = false; 
+        loadedRegion = null;
         tableWrap.innerHTML = `<div class="state-box">failed to load data.<br><small style="color:#555">${err.message}</small></div>`;
     });
 }
