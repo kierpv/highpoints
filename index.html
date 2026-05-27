@@ -171,35 +171,22 @@ function loadRegion(region) {
     if (loading || loadedRegion === region) return;
     loading = true; loadedRegion = region; allData = []; filtered = []; currentPage = 1;
     controlsBar.style.display = 'none'; pagination.style.display = 'none';
-    tableWrap.innerHTML = `<div class="state-box">Loading ${region.toUpperCase()} data...</div>`;
+    tableWrap.innerHTML = `<div class="state-box">Ładowanie ${region.toUpperCase()}...</div>`;
 
     fetch(`data-${region}.json`)
-    .then(r => r.text())
-    .then(rawText => {
-        let data = [];
-        let cleanText = rawText.trim();
-
-        // 1. Sprawdzamy czy to standardowa tablica JSON
-        if (cleanText.startsWith('[')) {
-            try {
-                data = JSON.parse(cleanText);
-            } catch (e) {
-                // Jeśli parsowanie całej tablicy zawiedzie, spróbuj metody linijkowej
-                data = fallbackParse(cleanText);
-            }
-        } else {
-            // 2. Jeśli nie zaczyna się od [, traktuj jako NDJSON
-            data = fallbackParse(cleanText);
-        }
-
-        if (!Array.isArray(data) || data.length === 0) throw new Error("No data found");
-
-        // Przetwarzanie (taka sama logika dla obu przypadków)
+    .then(r => r.json()) // Pobieramy i parsujemy jako gotowy obiekt
+    .then(data => {
+        // Logika przetwarzania
         data.forEach(d => {
             d.h = parseFloat(d.h) || null;
             d.t = d.t ? String(d.t).trim().toUpperCase() : 'OTHER';
-            d.state = region === 'europe' ? guessEuropeCountry(d.lat, d.lng) : (d.state || 'Unknown');
-            d.city = d.city || '—';
+            if (region === 'europe') {
+                d.state = guessEuropeCountry(d.lat, d.lng);
+                d.city = d.city || '—';
+            } else {
+                d.state = d.state || 'Unknown';
+                d.city = d.city || '—';
+            }
         });
 
         allData = data;
@@ -209,18 +196,9 @@ function loadRegion(region) {
     })
     .catch(err => {
         loading = false;
-        tableWrap.innerHTML = `<div class="state-box">Failed to load: ${err.message}</div>`;
+        console.error("Błąd ładowania:", err);
+        tableWrap.innerHTML = `<div class="state-box">Błąd: ${err.message}. Sprawdź konsolę (F12).</div>`;
     });
-}
-
-// Pomocniczy parser dla brudnych danych
-function fallbackParse(text) {
-    let result = [];
-    text.split('\n').forEach(line => {
-        let clean = line.trim().replace(/^\[|\]$|,$/g, '');
-        if (clean) try { result.push(JSON.parse(clean)); } catch(e) {}
-    });
-    return result;
 }
 
 function applyFilters() {
