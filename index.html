@@ -167,37 +167,82 @@ document.querySelectorAll('.country-btn').forEach(btn => {
     });
 });
 
-function loadRegion(region) {
+async function loadRegion(region) {
     if (loading || loadedRegion === region) return;
-    loading = true; loadedRegion = region; allData = []; filtered = []; currentPage = 1;
-    controlsBar.style.display = 'none'; pagination.style.display = 'none';
+
+    loading = true;
+    loadedRegion = region;
+    allData = [];
+    filtered = [];
+    currentPage = 1;
+
+    controlsBar.style.display = 'none';
+    pagination.style.display = 'none';
+
     tableWrap.innerHTML = `<div class="state-box">Loading ${region.toUpperCase()} data...</div>`;
 
-    fetch(`data-${region}.json?t=${new Date().getTime()}`) // Dodajemy timestamp, aby uniknąć cache'u
-    .then(r => {
-        if (!r.ok) throw new Error('HTTP error ' + r.status);
-        return r.json(); 
-    })
-    .then(data => {
+    try {
+
+        let files = [];
+
+        if (region === 'europe') {
+            files = [
+                'data/europe-1.json',
+                'data/europe-2.json',
+                'data/europe-3.json',
+                'data/europe-4.json'
+            ];
+        } else {
+            files = [`data-${region}.json`];
+        }
+
+        const responses = await Promise.all(
+            files.map(f => fetch(f + `?t=${Date.now()}`))
+        );
+
+        for (const r of responses) {
+            if (!r.ok) {
+                throw new Error(`HTTP ${r.status}`);
+            }
+        }
+
+        const arrays = await Promise.all(
+            responses.map(r => r.json())
+        );
+
+        const data = arrays.flat();
+
         data.forEach(d => {
             d.h = parseFloat(d.h) || null;
             d.t = d.t ? String(d.t).trim().toUpperCase() : 'OTHER';
-            d.state = region === 'europe' ? guessEuropeCountry(d.lat, d.lng) : (d.state || 'Unknown');
+            d.state = region === 'europe'
+                ? guessEuropeCountry(d.lat, d.lng)
+                : (d.state || 'Unknown');
             d.city = d.city || '—';
         });
 
         allData = data;
-        loading = false;
-        applyFilters();
-        controlsBar.style.display = 'flex';
-    })
-    .catch(err => {
-        loading = false;
-        console.error("Critical Load Error:", err);
-        tableWrap.innerHTML = `<div class="state-box">Failed to load data. Error: ${err.message}</div>`;
-    });
-}
 
+        loading = false;
+
+        applyFilters();
+
+        controlsBar.style.display = 'flex';
+
+    } catch (err) {
+
+        loading = false;
+
+        console.error('Critical Load Error:', err);
+
+        tableWrap.innerHTML = `
+            <div class="state-box">
+                Failed to load data.<br><br>
+                ${err.message}
+            </div>
+        `;
+    }
+}
 function applyFilters() {
     const q = filterInput.value.trim().toLowerCase();
     const t = typeFilter.value.toUpperCase();
