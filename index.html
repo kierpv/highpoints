@@ -210,7 +210,7 @@ async function loadRegion(region) {
             responses.map(r => r.json())
         );
 
-        const data = arrays.flat();
+        let data = arrays.flat();
 
         data.forEach(d => {
     d.h = parseFloat(d.h) || null;
