@@ -221,8 +221,32 @@ async function loadRegion(region) {
         : (d.state || 'Unknown');
 
     d.city = d.city || '—';
-        });
+});
 
+data = data.filter(d => {
+
+    const type = (d.t || '').toUpperCase();
+    const h = parseFloat(d.h);
+
+    if (!h || isNaN(h)) return false;
+
+    // absurdalne wysokości
+    if (h > 800) return false;
+
+    // wywal małe słupy energetyczne
+    if (
+        (
+            type.includes('LINE') ||
+            type.includes('TRANSMISSION') ||
+            type.includes('UTILITY')
+        )
+        && h < 80
+    ) {
+        return false;
+    }
+
+    return true;
+});
 allData = data.filter(d => {
 
     if (!d.h || d.h < 15 || d.h > 450) return false;
