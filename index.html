@@ -178,26 +178,40 @@ function loadRegion(region) {
     .then(r => { if (!r.ok) throw new Error('HTTP '+r.status); return r.text(); })
     .then(rawText => {
         let data = [];
-        let lines = rawText.split('\n');
-        
-        lines.forEach(line => {
-            let cleanLine = line.trim();
-            if (!cleanLine) return;
-            
-            // Clean formatting variations safely from PowerShell modifications
-            if (cleanLine.startsWith('[')) cleanLine = cleanLine.substring(1);
-            if (cleanLine.endsWith(']')) cleanLine = cleanLine.substring(0, cleanLine.length - 1);
-            if (cleanLine.endsWith(',')) cleanLine = cleanLine.substring(0, cleanLine.length - 1);
-            
-            cleanLine = cleanLine.trim();
-            if (!cleanLine) return;
-            
+        let cleanText = rawText.trim();
+
+        // Inteligentny hybrydowy parser: sprawdza czy tekst jest standardową tablicą JSON
+        if (cleanText.startsWith('[') && cleanText.endsWith(']')) {
             try {
-                data.push(JSON.parse(cleanLine));
-            } catch(err) {
-                // Ignore malformed rows quietly
+                // Jeśli plik to standardowy JSON, parsujemy go bezpośrednio
+                data = JSON.parse(cleanText);
+            } catch(e) {
+                // Jeśli bezpośrednie parsowanie zawiodło (np. ucięty plik), przechodzimy do odczytu linii
             }
-        });
+        }
+
+        // Jeśli tablica nadal jest pusta, przetwarzamy plik jako strukturę wielolinijkową
+        if (data.length === 0) {
+            let lines = cleanText.split('\n');
+            lines.forEach(line => {
+                let cleanLine = line.trim();
+                if (!cleanLine) return;
+                
+                // Usuwanie ewentualnych śmieciowych znaków składniowych tablicy na początku/końcu linii
+                if (cleanLine.startsWith('[')) cleanLine = cleanLine.substring(1);
+                if (cleanLine.endsWith(']')) cleanLine = cleanLine.substring(0, cleanLine.length - 1);
+                if (cleanLine.endsWith(',')) cleanLine = cleanLine.substring(0, cleanLine.length - 1);
+                
+                cleanLine = cleanLine.trim();
+                if (!cleanLine) return;
+                
+                try {
+                    data.push(JSON.parse(cleanLine));
+                } catch(err) {
+                    // Pomijanie uszkodzonych rzędów składniowych
+                }
+            });
+        }
 
         if (data.length === 0) throw new Error("Parsed 0 structures. Verification failed.");
 
