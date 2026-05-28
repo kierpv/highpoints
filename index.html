@@ -1,575 +1,315 @@
-```html
-<script>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Highpoints</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🗼</text></svg>">
+    <style>
+        :root { --bg:#0a0a0a; --footer-bg:rgba(10,10,10,0.95); --text:#fff; --dim:#888; --accent:#3498db; --border:#222; --row-hover:#141414; --panel:#111; }
+        *,*::before,*::after { box-sizing:border-box; }
+        body,html { margin:0;padding:0;height:100%;overflow:hidden;background:var(--bg);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
+        iframe.map-frame { width:100%;height:100%;border:none;display:block; }
+        .overlay { position:fixed;top:0;left:0;width:100%;height:calc(100% - 55px);background:var(--bg);z-index:50;display:none;overflow:hidden;flex-direction:column; }
+        .overlay.active { display:flex; }
+        .scroll-overlay { overflow-y:auto;padding:60px 20px; }
+        .container { max-width:650px;margin:0 auto;padding-bottom:50px; }
+        h1 { color:var(--text);font-size:26px;margin-top:0;margin-bottom:20px;font-weight:600; }
+        .description-text { color:var(--dim);font-size:16px;line-height:1.6; }
+        strong { color:#eee; }
+        .comments-frame { width:100%;height:650px;border:none; }
+        .map-footer { position:fixed;bottom:0;width:100%;height:55px;background:var(--footer-bg);border-top:1px solid var(--border);display:grid;grid-template-columns:1fr 1fr 1fr 1fr;align-items:center;z-index:100; }
+        .footer-item { text-align:center;color:var(--dim);font-size:13px; }
+        .nav-btn { color:#eee;cursor:pointer;padding:10px;font-weight:500; }
+        .nav-btn:hover { color:var(--text); }
+        .active-btn { color:var(--accent) !important; }
+        #data-page { flex-direction:column; }
+        .country-bar { padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--bg); }
+        .country-btn { padding:6px 16px;border-radius:20px;border:1px solid #333;background:#1a1a1a;color:#aaa;font-size:13px;cursor:pointer;transition:all .15s;font-weight:500; }
+        .country-btn:hover { border-color:#555;color:#ddd; }
+        .country-btn.active { background:var(--accent);border-color:var(--accent);color:#fff; }
+        .controls-bar { padding:10px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:var(--bg); }
+        #filter-input { background:var(--panel);border:1px solid #333;border-radius:8px;color:var(--text);font-size:14px;padding:7px 12px;outline:none;width:180px; }
+        #filter-input:focus { border-color:var(--accent); }
+        select.ctl { background:var(--panel);border:1px solid #333;border-radius:6px;color:#ccc;font-size:13px;padding:6px 10px;outline:none;cursor:pointer;max-width:180px; }
+        .checkbox-container { display:flex;align-items:center;gap:6px;color:var(--dim);font-size:12px;cursor:pointer;user-select:none; }
+        .meta-text { color:var(--dim);font-size:12px;margin-left:auto; }
+        .table-wrap { flex:1;overflow-y:auto;overflow-x:auto; }
+        table { width:100%;border-collapse:collapse;font-size:13px;min-width:600px; }
+        thead { position:sticky;top:0;z-index:5;background:#0f0f0f; }
+        th { padding:10px 14px;text-align:left;color:var(--dim);border-bottom:1px solid var(--border);font-weight:500;cursor:pointer;user-select:none;white-space:nowrap; }
+        th:hover { color:#ccc; }
+        th.sorted { color:var(--accent); }
+        td { padding:9px 14px;border-bottom:1px solid #161616;color:#ccc;vertical-align:middle; }
+        tr:hover td { background:var(--row-hover); }
+        td.name-cell { color:var(--text);font-weight:500;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+        td.height-cell { color:var(--accent);font-weight:600;text-align:right; }
+        td.coord-cell { font-family:monospace;font-size:11px;color:#555; }
+        td a { color:var(--accent);text-decoration:none; }
+        td a:hover { text-decoration:underline; }
+        .tag { background:#1e1e1e;border-radius:3px;padding:2px 6px;font-size:11px;color:#aaa;font-weight:600; }
+        .state-box { text-align:center;padding:80px 20px;color:var(--dim); }
+        .dot { display:inline-block;width:6px;height:6px;background:var(--accent);border-radius:50%;margin:0 3px;animation:bounce 1.2s infinite; }
+        .dot:nth-child(2){animation-delay:.2s} .dot:nth-child(3){animation-delay:.4s}
+        @keyframes bounce{0%,80%,100%{transform:scale(.6);opacity:.4}40%{transform:scale(1);opacity:1}}
+        .pagination { display:flex;align-items:center;justify-content:center;gap:8px;padding:12px 20px;border-top:1px solid var(--border);background:var(--bg); }
+        .pg-btn { background:#1a1a1a;border:1px solid #333;border-radius:6px;color:#aaa;font-size:13px;padding:5px 14px;cursor:pointer; }
+        .pg-btn:hover:not(:disabled){border-color:#555;color:#fff} .pg-btn:disabled{opacity:.3;cursor:default}
+        .pg-info { color:var(--dim);font-size:13px; }
+    </style>
+</head>
+<body>
 
+<iframe class="map-frame" allowfullscreen allow="geolocation" src="https://umap.openstreetmap.fr/en/map/masts-chimneys-turbines-etc-2026_1398843?scaleControl=false&miniMap=false&scrollWheelZoom=true&zoomControl=true&editMode=disabled&moreControl=true&searchControl=null&tilelayersControl=null&embedControl=null&datalayersControl=true&onLoadPanel=caption&captionBar=false&captionMenus=true"></iframe>
+
+<div id="about-page" class="overlay scroll-overlay">
+    <div class="container">
+        <h1>🗼 Highpoints</h1>
+        <p class="description-text">highpoints is a map of urban climbing spots such as masts, chimneys, wind turbines, pylons, etc.<br><br>it's a free non-profit side project. the map currently tracks over <strong>1,100,000 structures</strong>.<br><br>you can contact me on instagram - kierpv.</p>
+    </div>
+</div>
+
+<div id="comments-page" class="overlay scroll-overlay">
+    <div class="container">
+        <iframe src="https://highpoints.atabook.org" class="comments-frame" allowtransparency="true"></iframe>
+    </div>
+</div>
+
+<div id="data-page" class="overlay">
+    <div class="country-bar">
+        <button class="country-btn" data-region="europe">🇪🇺 Europe</button>
+        <button class="country-btn" data-region="usa">🇺🇸 USA</button>
+        <button class="country-btn" data-region="canada">🇨🇦 Canada</button>
+        <button class="country-btn" data-region="mexico">🇲🇽 Mexico</button>
+    </div>
+    <div class="controls-bar" id="controls-bar" style="display:none">
+        <input id="filter-input" type="text" placeholder="filter by name…" autocomplete="off">
+        <select class="ctl" id="subregion-filter"><option value="">all countries</option></select>
+        <select class="ctl" id="type-filter"><option value="">all types</option></select>
+        <label class="checkbox-container"><input type="checkbox" id="hide-lines-check" checked> Hide poles/lines</label>
+        <label class="checkbox-container"><input type="checkbox" id="hide-unknown-check"> Hide unknown heights</label>
+        <span class="meta-text" id="meta-text"></span>
+    </div>
+    <div class="table-wrap" id="table-wrap">
+        <div class="state-box"><p style="font-size:15px">select a region above</p></div>
+    </div>
+    <div class="pagination" id="pagination" style="display:none">
+        <button class="pg-btn" id="pg-prev">← prev</button>
+        <span class="pg-info" id="pg-info"></span>
+        <button class="pg-btn" id="pg-next">next →</button>
+    </div>
+</div>
+
+<div class="map-footer">
+    <div class="footer-item">views: <span id="gc-vc">...</span></div>
+    <div class="footer-item"><span class="nav-btn" id="btn-data" onclick="showPage('data')">data</span></div>
+    <div class="footer-item"><span class="nav-btn" id="btn-about" onclick="showPage('about')">about</span></div>
+    <div class="footer-item"><span class="nav-btn" id="btn-comments" onclick="showPage('comments')">comments</span></div>
+</div>
+
+<script data-goatcounter="https://kierpv.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script>
+<script>
 fetch('https://kierpv.goatcounter.com/counter/TOTAL.json')
-.then(r => r.ok ? r.json() : Promise.reject())
-.then(d => document.getElementById('gc-vc').textContent = d.count.replace(/[^0-9]/g,''))
-.catch(() => document.getElementById('gc-vc').textContent = '8+');
+    .then(r => r.ok ? r.json() : Promise.reject())
+    .then(d => document.getElementById('gc-vc').textContent = d.count.replace(/[^0-9]/g,''))
+    .catch(() => document.getElementById('gc-vc').textContent = '8+');
 
 const PAGES = ['about','comments','data'];
-
 function showPage(id) {
-
-    const targetPage = document.getElementById(id + '-page');
-    const targetBtn = document.getElementById('btn-' + id);
-
-    const isShowing = targetPage.classList.contains('active');
-
+    const target = document.getElementById(id+'-page');
+    const isShowing = target.classList.contains('active');
     PAGES.forEach(p => {
-
-        document.getElementById(p + '-page').classList.remove('active');
-
-        const b = document.getElementById('btn-' + p);
-
-        if (b) b.classList.remove('active-btn');
+        document.getElementById(p+'-page').classList.remove('active');
+        const b = document.getElementById('btn-'+p); if(b) b.classList.remove('active-btn');
     });
-
-    if (!isShowing) {
-
-        targetPage.classList.add('active');
-
-        if (targetBtn)
-            targetBtn.classList.add('active-btn');
-    }
+    if (!isShowing) { target.classList.add('active'); const b = document.getElementById('btn-'+id); if(b) b.classList.add('active-btn'); }
 }
 
-let allData = [];
-let filtered = [];
+// ISO country code → name
+const COUNTRY_NAMES = {
+    AD:'Andorra',AL:'Albania',AT:'Austria',BA:'Bosnia',BE:'Belgium',BG:'Bulgaria',BY:'Belarus',
+    CH:'Switzerland',CY:'Cyprus',CZ:'Czech Republic',DE:'Germany',DK:'Denmark',EE:'Estonia',
+    ES:'Spain',FI:'Finland',FR:'France',GB:'United Kingdom',GR:'Greece',HR:'Croatia',
+    HU:'Hungary',IE:'Ireland',IS:'Iceland',IT:'Italy',LI:'Liechtenstein',LT:'Lithuania',
+    LU:'Luxembourg',LV:'Latvia',MD:'Moldova',ME:'Montenegro',MK:'North Macedonia',MT:'Malta',
+    NL:'Netherlands',NO:'Norway',PL:'Poland',PT:'Portugal',RO:'Romania',RS:'Serbia',
+    RU:'Russia',SE:'Sweden',SI:'Slovenia',SK:'Slovakia',TR:'Turkey',UA:'Ukraine',XK:'Kosovo'
+};
 
-let sortCol = 'h';
-let sortDir = -1;
+// Normalize type to clean label
+function normalizeType(t) {
+    t = (t||'').toString().trim().toUpperCase();
+    if (t.includes('CHIMNEY') || t.includes('STACK')) return 'CHIMNEY';
+    if (t.includes('WINDMILL') || t.includes('TURBINA') || t.includes('TURBINE') || t.includes('WIND_TURBINE')) return 'WIND TURBINE';
+    if (t.includes('COMMUNICATION') && t.includes('MAST')) return 'COMM MAST';
+    if (t.includes('COMMUNICATION') && t.includes('TOWER')) return 'COMM TOWER';
+    if (t.includes('OBSERVATION')) return 'OBS TOWER';
+    if (t.includes('LIGHTING') && t.includes('MAST')) return 'LIGHTING MAST';
+    if (t.includes('LIGHTING') && t.includes('TOWER')) return 'LIGHTING TOWER';
+    if (t.includes('MAST')) return 'MAST';
+    if (t.includes('CRANE')) return 'CRANE';
+    if (t.includes('COOLING')) return 'COOLING TOWER';
+    if (t.includes('MINARET')) return 'MINARET';
+    if (t.includes('SILO')) return 'SILO';
+    if (t.includes('TOWER')) return 'TOWER';
+    if (t.includes('ANTENNA')) return 'ANTENNA';
+    if (t.includes('TRANSMISSION') || t.includes('PYLON') || t === 'POLE' || t === 'LINE') return 'POLE / LINE';
+    if (t.includes('CABLE') || t.includes('ROPEWAY') || t.includes('CATENARY')) return 'CABLE / ROPEWAY';
+    if (t.includes('BUILDING')) return 'BUILDING';
+    return t || 'OTHER';
+}
 
-let currentPage = 1;
+const POLE_TYPES = new Set(['POLE / LINE','CABLE / ROPEWAY']);
+const MAX_H = { europe: 500, usa: 700, canada: 700, mexico: 500 };
+const MIN_POLE_H = 60; // filter poles/lines below this height
 
-const PAGE_SIZE = 250;
+let allData=[], filtered=[], sortCol='h', sortDir=-1, currentPage=1;
+const PAGE_SIZE=250;
+let loadedRegion=null, loading=false;
 
-let loadedRegion = null;
-let loading = false;
-
-const tableWrap = document.getElementById('table-wrap');
-const metaText = document.getElementById('meta-text');
-const controlsBar = document.getElementById('controls-bar');
-const pagination = document.getElementById('pagination');
-
-const filterInput = document.getElementById('filter-input');
-const typeFilter = document.getElementById('type-filter');
-const subregionFilter = document.getElementById('subregion-filter');
-
-const hideLinesCheck =
-    document.getElementById('hide-lines-check');
-
-const hideUnknownCheck =
-    document.getElementById('hide-unknown-check');
+const tableWrap=document.getElementById('table-wrap');
+const metaText=document.getElementById('meta-text');
+const controlsBar=document.getElementById('controls-bar');
+const pagination=document.getElementById('pagination');
+const filterInput=document.getElementById('filter-input');
+const typeFilter=document.getElementById('type-filter');
+const subregionFilter=document.getElementById('subregion-filter');
+const hideLinesCheck=document.getElementById('hide-lines-check');
+const hideUnknownCheck=document.getElementById('hide-unknown-check');
 
 document.querySelectorAll('.country-btn').forEach(btn => {
-
     btn.addEventListener('click', () => {
-
-        document.querySelectorAll('.country-btn')
-            .forEach(b => b.classList.remove('active'));
-
+        document.querySelectorAll('.country-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
-
         loadRegion(btn.dataset.region);
     });
 });
 
 async function loadRegion(region) {
-
-    if (loading || loadedRegion === region)
-        return;
-
-    loading = true;
-
-    loadedRegion = region;
-
-    allData = [];
-    filtered = [];
-
-    currentPage = 1;
-
-    controlsBar.style.display = 'none';
-    pagination.style.display = 'none';
-
-    tableWrap.innerHTML = `
-        <div class="state-box">
-            Loading ${region.toUpperCase()} data...
-        </div>
-    `;
+    if (loading || loadedRegion === region) return;
+    loading=true; loadedRegion=region; allData=[]; filtered=[]; currentPage=1;
+    controlsBar.style.display='none'; pagination.style.display='none';
+    tableWrap.innerHTML=`<div class="state-box"><span class="dot"></span><span class="dot"></span><span class="dot"></span><p style="margin-top:14px;font-size:13px">loading ${region.toUpperCase()}…</p></div>`;
+    filterInput.value='';
 
     try {
-
-        let files = [];
-
-        if (region === 'europe') {
-
-            files = [
-                'europe-1.json'
-            ];
-
-        } else {
-
-            files = [
-                `data-${region}.json`
-            ];
-        }
-
-        const responses = await Promise.all(
-            files.map(f =>
-                fetch(f + `?t=${Date.now()}`)
-            )
-        );
-
-        for (const r of responses) {
-
-            if (!r.ok)
-                throw new Error(`HTTP ${r.status}`);
-        }
+        const files = region === 'europe'
+            ? ['europe-1.json','europe-2.json','europe-3.json']
+            : [`data-${region}.json`];
 
         const arrays = await Promise.all(
-            responses.map(r => r.json())
+            files.map(f => fetch(f).then(r => { if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); }))
         );
+        let raw = arrays.flat();
 
-        let data = arrays.flat();
+        const maxH = MAX_H[region] || 600;
 
-        data.forEach(d => {
+        allData = raw.map(d => {
+            const t = normalizeType(d.t || d.type || '');
+            let h = d.h != null ? parseFloat(d.h) : null;
+            if (isNaN(h)) h = null;
 
-            d.n = d.n || d.name || '—';
-
-            d.t = (
-                d.t ||
-                d.type ||
-                'OTHER'
-            )
-            .toString()
-            .trim()
-            .toUpperCase();
-
-            d.h =
-                d.h != null
-                ? parseFloat(d.h)
-                : null;
-
-            d.state =
-                region === 'europe'
-                ? (d.country || 'Unknown')
+            const country = region === 'europe'
+                ? (COUNTRY_NAMES[d.country] || d.country || 'Unknown')
                 : (d.state || 'Unknown');
 
-            d.city = d.city || '—';
-        });
-
-        allData = data.filter(d => {
-
-            if (d.t === 'TRANSMISSION_LINE')
-                return false;
-
+            return { n: d.n || d.name || '—', t, h, lat: d.lat, lng: d.lng, city: d.city || '—', state: country };
+        }).filter(d => {
+            // Remove bad heights
+            if (d.h !== null && (d.h > maxH)) return false;
+            // Remove poles/lines below 60m
+            if (POLE_TYPES.has(d.t) && (d.h === null || d.h < MIN_POLE_H)) return false;
             return true;
         });
 
-        populateFilters();
+        // Populate filters
+        const types = [...new Set(allData.map(d=>d.t))].sort();
+        const states = [...new Set(allData.map(d=>d.state))].sort();
+        typeFilter.innerHTML = '<option value="">all types</option>' + types.map(t=>`<option value="${esc(t)}">${esc(t)}</option>`).join('');
+        subregionFilter.innerHTML = '<option value="">all countries</option>' + states.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join('');
 
-        loading = false;
-
-        controlsBar.style.display = 'flex';
-
+        loading=false;
+        controlsBar.style.display='flex';
         applyFilters();
-
-    } catch (err) {
-
-        loading = false;
-
-        console.error(err);
-
-        tableWrap.innerHTML = `
-            <div class="state-box">
-                Failed to load data.
-                <br><br>
-                ${err.message}
-            </div>
-        `;
+    } catch(err) {
+        loading=false; loadedRegion=null;
+        tableWrap.innerHTML=`<div class="state-box">Failed to load data.<br><small style="color:#555">${err.message}</small></div>`;
     }
 }
 
-function populateFilters() {
-
-    const types = [
-        ...new Set(
-            allData.map(d => d.t).filter(Boolean)
-        )
-    ].sort();
-
-    const states = [
-        ...new Set(
-            allData.map(d => d.state).filter(Boolean)
-        )
-    ].sort();
-
-    typeFilter.innerHTML =
-        '<option value=\"\">all types</option>';
-
-    types.forEach(t => {
-
-        typeFilter.innerHTML += `
-            <option value="${esc(t)}">
-                ${esc(t)}
-            </option>
-        `;
-    });
-
-    subregionFilter.innerHTML =
-        '<option value=\"\">all</option>';
-
-    states.forEach(s => {
-
-        subregionFilter.innerHTML += `
-            <option value="${esc(s)}">
-                ${esc(s)}
-            </option>
-        `;
-    });
-}
-
 function applyFilters() {
+    const q=filterInput.value.trim().toLowerCase();
+    const t=typeFilter.value;
+    const sub=subregionFilter.value;
+    const hideLines=hideLinesCheck.checked;
+    const hideUnknown=hideUnknownCheck.checked;
 
-    const q =
-        filterInput.value.trim().toLowerCase();
-
-    const t =
-        typeFilter.value.toUpperCase();
-
-    const sub =
-        subregionFilter.value;
-
-    const hideLines =
-        hideLinesCheck.checked;
-
-    const hideUnknown =
-        hideUnknownCheck.checked;
-
-    filtered = allData.filter(d => {
-
-        const nameMatch =
-            !q ||
-            (d.n || '')
-                .toLowerCase()
-                .includes(q) ||
-            (d.city || '')
-                .toLowerCase()
-                .includes(q);
-
-        const typeMatch =
-            !t ||
-            d.t === t;
-
-        const subMatch =
-            !sub ||
-            d.state === sub;
-
-        if (
-            hideLines &&
-            (
-                d.t === 'TRANSMISSION_LINE' ||
-                d.t === 'POLE'
-            )
-        ) {
-            return false;
-        }
-
-        if (
-            hideUnknown &&
-            (d.h === null || d.h === undefined)
-        ) {
-            return false;
-        }
-
-        return (
-            nameMatch &&
-            typeMatch &&
-            subMatch
-        );
+    filtered=allData.filter(d => {
+        if (hideLines && POLE_TYPES.has(d.t)) return false;
+        if (hideUnknown && d.h === null) return false;
+        if (t && d.t !== t) return false;
+        if (sub && d.state !== sub) return false;
+        if (q && !(d.n||'').toLowerCase().includes(q) && !(d.city||'').toLowerCase().includes(q)) return false;
+        return true;
     });
-
     sortData();
 }
 
 function sortData() {
-
-    filtered.sort((a, b) => {
-
-        let av = a[sortCol];
-        let bv = b[sortCol];
-
-        if (sortCol === 'h') {
-
-            av =
-                av != null
-                ? parseFloat(av)
-                : -Infinity;
-
-            bv =
-                bv != null
-                ? parseFloat(bv)
-                : -Infinity;
-
-            return (av - bv) * sortDir;
+    filtered.sort((a,b) => {
+        let av=a[sortCol], bv=b[sortCol];
+        if (sortCol==='h') {
+            av=av!=null?parseFloat(av):-Infinity;
+            bv=bv!=null?parseFloat(bv):-Infinity;
+            return (av-bv)*sortDir;
         }
-
-        av = (av || '').toLowerCase();
-        bv = (bv || '').toLowerCase();
-
-        return av < bv
-            ? -sortDir
-            : av > bv
-            ? sortDir
-            : 0;
+        av=(av||'').toLowerCase(); bv=(bv||'').toLowerCase();
+        return av<bv?-sortDir:av>bv?sortDir:0;
     });
-
-    currentPage = 1;
-
-    renderTable();
+    currentPage=1; renderTable();
 }
 
 function renderTable() {
+    const total=filtered.length;
+    const start=(currentPage-1)*PAGE_SIZE;
+    const end=Math.min(start+PAGE_SIZE,total);
+    const rows=filtered.slice(start,end);
+    const totalPages=Math.ceil(total/PAGE_SIZE)||1;
+    metaText.textContent=`${total.toLocaleString()} structures`;
 
-    const total = filtered.length;
+    function arrow(col){return sortCol===col?(sortDir===-1?' ▼':' ▲'):'';}
+    function th(col,label){return `<th data-col="${col}" class="${sortCol===col?'sorted':''}">${label}${arrow(col)}</th>`;}
 
-    const start =
-        (currentPage - 1) * PAGE_SIZE;
+    if (total===0) { tableWrap.innerHTML=`<div class="state-box">No structures match your filters.</div>`; pagination.style.display='none'; return; }
 
-    const end =
-        Math.min(start + PAGE_SIZE, total);
+    tableWrap.innerHTML=`<table><thead><tr>${th('n','Name')}${th('t','Type')}${th('h','Height (m)')}${th('city','City')}${th('state',loadedRegion==='europe'?'Country':'State')}<th>Coordinates</th><th>uMap</th></tr></thead><tbody>${
+        rows.map(d=>{
+            const umap=d.lat!=null?`https://umap.openstreetmap.fr/en/map/masts-chimneys-turbines-etc-2026_1398843#17/${d.lat}/${d.lng}`:null;
+            return `<tr><td class="name-cell" title="${esc(d.n)}">${esc(d.n||'—')}</td><td><span class="tag">${esc(d.t)}</span></td><td class="height-cell">${d.h!=null?d.h:'—'}</td><td>${esc(d.city||'—')}</td><td>${esc(d.state||'—')}</td><td class="coord-cell">${d.lat!=null?`${d.lat}, ${d.lng}`:'—'}</td><td>${umap?`<a href="${umap}" target="_blank">↗</a>`:'—'}</td></tr>`;
+        }).join('')
+    }</tbody></table>`;
 
-    const rows =
-        filtered.slice(start, end);
+    tableWrap.querySelectorAll('th[data-col]').forEach(th=>{
+        th.addEventListener('click',()=>{ if(sortCol===th.dataset.col){sortDir*=-1;}else{sortCol=th.dataset.col;sortDir=sortCol==='h'?-1:1;} sortData(); });
+    });
 
-    const totalPages =
-        Math.ceil(total / PAGE_SIZE) || 1;
-
-    metaText.textContent =
-        `${total.toLocaleString()} structures`;
-
-    function arrow(col) {
-
-        return sortCol === col
-            ? (sortDir === -1 ? ' ▼' : ' ▲')
-            : '';
-    }
-
-    function th(col, label) {
-
-        return `
-            <th data-col="${col}"
-                class="${sortCol===col?'sorted':''}">
-                ${label}
-                <span class="sort-arrow">
-                    ${arrow(col)}
-                </span>
-            </th>
-        `;
-    }
-
-    if (total === 0) {
-
-        tableWrap.innerHTML = `
-            <div class="state-box">
-                No structures match your filters.
-            </div>
-        `;
-
-        pagination.style.display = 'none';
-
-        return;
-    }
-
-    tableWrap.innerHTML = `
-        <table>
-            <thead>
-                <tr>
-                    ${th('n','Name')}
-                    ${th('t','Type')}
-                    ${th('h','Height (m)')}
-                    ${th('city','City')}
-                    ${th('state','Country')}
-                    <th>Coordinates</th>
-                    <th>uMap</th>
-                </tr>
-            </thead>
-
-            <tbody>
-
-                ${rows.map(d => {
-
-                    const lat = d.lat;
-                    const lng = d.lng;
-
-                    const umap =
-                        lat != null && lng != null
-                        ? `https://umap.openstreetmap.fr/en/map/masts-chimneys-turbines-etc-2026_1398843#17/${lat}/${lng}`
-                        : null;
-
-                    return `
-                        <tr>
-
-                            <td class="name-cell">
-                                ${esc(d.n || '—')}
-                            </td>
-
-                            <td>
-                                <span class="tag">
-                                    ${esc(d.t)}
-                                </span>
-                            </td>
-
-                            <td class="height-cell">
-                                ${d.h != null ? d.h : '—'}
-                            </td>
-
-                            <td>
-                                ${esc(d.city || '—')}
-                            </td>
-
-                            <td>
-                                ${esc(d.state || '—')}
-                            </td>
-
-                            <td class="coord-cell">
-                                ${
-                                    lat != null && lng != null
-                                    ? `${lat}, ${lng}`
-                                    : '—'
-                                }
-                            </td>
-
-                            <td>
-                                ${
-                                    umap
-                                    ? `<a href="${umap}" target="_blank">↗</a>`
-                                    : '—'
-                                }
-                            </td>
-
-                        </tr>
-                    `;
-                }).join('')}
-
-            </tbody>
-        </table>
-    `;
-
-    tableWrap.querySelectorAll('th[data-col]')
-        .forEach(th => {
-
-            th.addEventListener('click', () => {
-
-                if (sortCol === th.dataset.col) {
-
-                    sortDir *= -1;
-
-                } else {
-
-                    sortCol = th.dataset.col;
-
-                    sortDir =
-                        sortCol === 'h'
-                        ? -1
-                        : 1;
-                }
-
-                sortData();
-            });
-        });
-
-    if (total > PAGE_SIZE) {
-
-        pagination.style.display = 'flex';
-
-        document.getElementById('pg-info')
-            .textContent =
-            `page ${currentPage} / ${totalPages}`;
-
-        document.getElementById('pg-prev')
-            .disabled = currentPage === 1;
-
-        document.getElementById('pg-next')
-            .disabled = currentPage === totalPages;
-
-    } else {
-
-        pagination.style.display = 'none';
-    }
+    if (total>PAGE_SIZE) {
+        pagination.style.display='flex';
+        document.getElementById('pg-info').textContent=`page ${currentPage} / ${totalPages} (${(start+1).toLocaleString()}–${end.toLocaleString()})`;
+        document.getElementById('pg-prev').disabled=currentPage===1;
+        document.getElementById('pg-next').disabled=currentPage===totalPages;
+    } else { pagination.style.display='none'; }
 }
 
-document.getElementById('pg-prev')
-.addEventListener('click', () => {
+document.getElementById('pg-prev').addEventListener('click',()=>{if(currentPage>1){currentPage--;renderTable();tableWrap.scrollTop=0;}});
+document.getElementById('pg-next').addEventListener('click',()=>{if(currentPage*PAGE_SIZE<filtered.length){currentPage++;renderTable();tableWrap.scrollTop=0;}});
+filterInput.addEventListener('input',debounce(applyFilters,250));
+typeFilter.addEventListener('change',applyFilters);
+subregionFilter.addEventListener('change',applyFilters);
+hideLinesCheck.addEventListener('change',applyFilters);
+hideUnknownCheck.addEventListener('change',applyFilters);
 
-    if (currentPage > 1) {
-
-        currentPage--;
-
-        renderTable();
-
-        tableWrap.scrollTop = 0;
-    }
-});
-
-document.getElementById('pg-next')
-.addEventListener('click', () => {
-
-    if ((currentPage * PAGE_SIZE) < filtered.length) {
-
-        currentPage++;
-
-        renderTable();
-
-        tableWrap.scrollTop = 0;
-    }
-});
-
-filterInput.addEventListener(
-    'input',
-    debounce(applyFilters, 250)
-);
-
-typeFilter.addEventListener(
-    'change',
-    applyFilters
-);
-
-subregionFilter.addEventListener(
-    'change',
-    applyFilters
-);
-
-hideLinesCheck.addEventListener(
-    'change',
-    applyFilters
-);
-
-hideUnknownCheck.addEventListener(
-    'change',
-    applyFilters
-);
-
-function debounce(fn, ms) {
-
-    let t;
-
-    return (...a) => {
-
-        clearTimeout(t);
-
-        t = setTimeout(() => fn(...a), ms);
-    };
-}
-
-function esc(s) {
-
-    return String(s || '')
-        .replace(/\u00a0/g, ' ')
-        .replace(/&/g,'&amp;')
-        .replace(/</g,'&lt;')
-        .replace(/>/g,'&gt;');
-}
-
+function debounce(fn,ms){let t;return(...a)=>{clearTimeout(t);t=setTimeout(()=>fn(...a),ms);};}
+function esc(s){return String(s||'').replace(/\u00a0/g,' ').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 </script>
-```
+</body>
+</html>
