@@ -138,24 +138,37 @@ const COUNTRY_NAMES = {
 // Normalize type to clean label
 function normalizeType(t) {
     t = (t||'').toString().trim().toUpperCase();
+    // Polish words
+    if (t.startsWith('BUDYNEK') || t === 'WIEŻOWIEC' || t.startsWith('WIEŻOWIEC')) return 'BUILDING';
+    if (t.startsWith('KOMIN') || t === 'KOMIN') return 'CHIMNEY';
+    if (t.startsWith('TURBINA') || t.includes('TURBINA WIATR')) return 'WIND TURBINE';
+    if (t.startsWith('MASZT') || t === 'MASZT') return 'MAST';
+    if (t.startsWith('WIEŻA') || t === 'WIEŻA') return 'TOWER';
+    if (t.startsWith('FARMA WIATR')) return 'WIND TURBINE';
+    // If type looks like a full sentence (contains name-like patterns), extract first keyword
+    if (t.includes('SŁUP') || t.startsWith('ZEW ') || t.startsWith('SLR ') || t.startsWith('LINIA')) return 'POLE / LINE';
+    // Standard types
     if (t.includes('CHIMNEY') || t.includes('STACK')) return 'CHIMNEY';
-    if (t.includes('WINDMILL') || t.includes('TURBINA') || t.includes('TURBINE') || t.includes('WIND_TURBINE')) return 'WIND TURBINE';
+    if (t.includes('WINDMILL') || t.includes('TURBINA') || t.includes('TURBINE') || t.includes('WIND_TURBINE') || t.includes('WIND TURBINE')) return 'WIND TURBINE';
     if (t.includes('COMMUNICATION') && t.includes('MAST')) return 'COMM MAST';
     if (t.includes('COMMUNICATION') && t.includes('TOWER')) return 'COMM TOWER';
+    if (t.includes('COMMUNICATIONS_TOWER') || t.includes('COMMUNICATIONS TOWER')) return 'COMM TOWER';
     if (t.includes('OBSERVATION')) return 'OBS TOWER';
+    if (t.includes('BELL_TOWER') || t.includes('BELL TOWER') || t.includes('MINARET')) return 'BELL/MINARET';
     if (t.includes('LIGHTING') && t.includes('MAST')) return 'LIGHTING MAST';
     if (t.includes('LIGHTING') && t.includes('TOWER')) return 'LIGHTING TOWER';
+    if (t.includes('SIREN')) return 'SIREN MAST';
     if (t.includes('MAST')) return 'MAST';
     if (t.includes('CRANE')) return 'CRANE';
     if (t.includes('COOLING')) return 'COOLING TOWER';
-    if (t.includes('MINARET')) return 'MINARET';
     if (t.includes('SILO')) return 'SILO';
+    if (t.includes('SPIRE')) return 'TOWER';
     if (t.includes('TOWER')) return 'TOWER';
     if (t.includes('ANTENNA')) return 'ANTENNA';
-    if (t.includes('TRANSMISSION') || t.includes('PYLON') || t === 'POLE' || t === 'LINE') return 'POLE / LINE';
-    if (t.includes('CABLE') || t.includes('ROPEWAY') || t.includes('CATENARY')) return 'CABLE / ROPEWAY';
-    if (t.includes('BUILDING')) return 'BUILDING';
-    return t || 'OTHER';
+    if (t.includes('TRANSMISSION') || t.includes('PYLON') || t === 'POLE' || t === 'LINE' || t.includes('CATENARY')) return 'POLE / LINE';
+    if (t.includes('CABLE') || t.includes('ROPEWAY') || t.includes('CABLE_CAR')) return 'CABLE / ROPEWAY';
+    if (t.includes('BUILDING') || t.includes('BUDYNEK')) return 'BUILDING';
+    return 'OTHER';
 }
 
 const POLE_TYPES = new Set(['POLE / LINE','CABLE / ROPEWAY']);
@@ -203,6 +216,9 @@ async function loadRegion(region) {
 
         const maxH = MAX_H[region] || 600;
 
+        // Max heights per type to filter AMSL-misreported values
+        const TYPE_MAX_H = { 'ANTENNA': 250, 'OBS TOWER': 350, 'COMM MAST': 350, 'COMM TOWER': 400 };
+
         allData = raw.map(d => {
             const t = normalizeType(d.t || d.type || '');
             let h = d.h != null ? parseFloat(d.h) : null;
@@ -215,7 +231,12 @@ async function loadRegion(region) {
             return { n: d.n || d.name || '—', t, h, lat: d.lat, lng: d.lng, city: d.city || '—', state: country };
         }).filter(d => {
             // Remove bad heights
-            if (d.h !== null && (d.h > maxH)) return false;
+            if (d.h !== null && d.h > maxH) return false;
+            // Per-type max height (catches AMSL-reported values)
+            if (region === 'europe' && d.h !== null) {
+                const typeMax = TYPE_MAX_H[d.t];
+                if (typeMax && d.h > typeMax) return false;
+            }
             // Remove poles/lines below 60m
             if (POLE_TYPES.has(d.t) && (d.h === null || d.h < MIN_POLE_H)) return false;
             return true;
