@@ -135,29 +135,48 @@ const COUNTRY_NAMES = {
     RU:'Russia',SE:'Sweden',SI:'Slovenia',SK:'Slovakia',TR:'Turkey',UA:'Ukraine',XK:'Kosovo'
 };
 
+// Extract height from Polish ULC-style type strings like "KOMIN 100 AGL ..." or "WYS. 165 M AGL"
+function extractPolishHeight(t) {
+    // "WYS. 121,55 M AGL" or "WYS. 100 M AGL" or "WYS. CAŁK. 103 M AGL"
+    let m = t.match(/WYS\.?\s+(?:CA[ŁL]K\.?\s+)?([\d]+[,.]?\d*)\s*M?\s+AGL/i);
+    if (m) return parseFloat(m[1].replace(',', '.'));
+    // "KOMIN 100 AGL" or "100M AGL" or "100 AGL"
+    m = t.match(/\b([\d]+[,.]?\d*)\s*M?\s+AGL/i);
+    if (m) return parseFloat(m[1].replace(',', '.'));
+    return null;
+}
+
 // Normalize type to clean label
-function normalizeType(t) {
-    t = (t||'').toString().trim().toUpperCase();
-    // Polish words
-    if (t.startsWith('BUDYNEK') || t === 'WIEŻOWIEC' || t.startsWith('WIEŻOWIEC')) return 'BUILDING';
-    if (t.startsWith('KOMIN') || t === 'KOMIN') return 'CHIMNEY';
-    if (t.startsWith('TURBINA') || t.includes('TURBINA WIATR')) return 'WIND TURBINE';
-    if (t.startsWith('MASZT') || t === 'MASZT') return 'MAST';
-    if (t.startsWith('WIEŻA') || t === 'WIEŻA') return 'TOWER';
+function normalizeType(raw) {
+    const t = (raw||'').toString().trim().toUpperCase();
+    // Polish first-word patterns (ULC data where t == full name)
+    if (t.startsWith('BUDYNEK') || t.startsWith('WIEŻOWIEC') || t === 'WIEŻOWIEC') return 'BUILDING';
+    if (t.startsWith('KOMINY') || t.startsWith('KOMIN')) return 'CHIMNEY';
+    if (t.startsWith('TURBINA WIATR') || t.startsWith('TURBINA')) return 'WIND TURBINE';
     if (t.startsWith('FARMA WIATR')) return 'WIND TURBINE';
-    // If type looks like a full sentence (contains name-like patterns), extract first keyword
-    if (t.includes('SŁUP') || t.startsWith('ZEW ') || t.startsWith('SLR ') || t.startsWith('LINIA')) return 'POLE / LINE';
-    // Standard types
+    if (t.startsWith('MASZT POMIAROWY')) return 'MAST';
+    if (t.startsWith('MASZT RCN') || t.startsWith('MASZT RTCN') || t.startsWith('MASZT RTON') || t.startsWith('MASZT')) return 'MAST';
+    if (t.startsWith('WIEŻA RTON') || t.startsWith('WIEŻA SLR') || t.startsWith('WIEŻA O WYS') || t.startsWith('WIEŻA')) return 'TOWER';
+    if (t.startsWith('SŁUPY') || t.startsWith('SŁUP') || t.startsWith('ZEW ') || t.startsWith('SLR ') || t.startsWith('LINIA') || t.includes('LINIA WN') || t.includes('SŁUPY WN')) return 'POLE / LINE';
+    // Standard OSM types
     if (t.includes('CHIMNEY') || t.includes('STACK')) return 'CHIMNEY';
-    if (t.includes('WINDMILL') || t.includes('TURBINA') || t.includes('TURBINE') || t.includes('WIND_TURBINE') || t.includes('WIND TURBINE')) return 'WIND TURBINE';
-    if (t.includes('COMMUNICATION') && t.includes('MAST')) return 'COMM MAST';
-    if (t.includes('COMMUNICATION') && t.includes('TOWER')) return 'COMM TOWER';
-    if (t.includes('COMMUNICATIONS_TOWER') || t.includes('COMMUNICATIONS TOWER')) return 'COMM TOWER';
-    if (t.includes('OBSERVATION')) return 'OBS TOWER';
+    if (t.includes('WIND_TURBINE') || t.includes('WIND TURBINE') || t.includes('WINDMILL')) return 'WIND TURBINE';
+    if (t.includes('TURBINA')) return 'WIND TURBINE';
+    if (t === 'MAST_COMMUNICATION' || (t.includes('COMMUNICATION') && t.includes('MAST'))) return 'COMM MAST';
+    if (t === 'TOWER_COMMUNICATION' || (t.includes('COMMUNICATION') && t.includes('TOWER')) || t.includes('COMMUNICATIONS_TOWER')) return 'COMM TOWER';
+    if (t.includes('OBSERVATION') || t === 'TOWER_OBSERVATION') return 'OBS TOWER';
     if (t.includes('BELL_TOWER') || t.includes('BELL TOWER') || t.includes('MINARET')) return 'BELL/MINARET';
-    if (t.includes('LIGHTING') && t.includes('MAST')) return 'LIGHTING MAST';
-    if (t.includes('LIGHTING') && t.includes('TOWER')) return 'LIGHTING TOWER';
+    if (t === 'MAST_LIGHTING' || (t.includes('LIGHTING') && t.includes('MAST'))) return 'LIGHTING MAST';
+    if (t === 'TOWER_LIGHTING' || (t.includes('LIGHTING') && t.includes('TOWER'))) return 'LIGHTING TOWER';
     if (t.includes('SIREN')) return 'SIREN MAST';
+    if (t.includes('WATCHTOWER') || t.includes('WATCH_TOWER')) return 'OBS TOWER';
+    if (t.includes('ADVERTISING') && t.includes('MAST')) return 'MAST';
+    if (t.includes('ADVERTISING') && t.includes('TOWER')) return 'TOWER';
+    if (t.includes('DEFENSIVE') || t.includes('FORTIFICATION')) return 'TOWER';
+    if (t.includes('FIREFIGHTER') || t.includes('TRAINING')) return 'TOWER';
+    if (t.includes('RADAR')) return 'TOWER';
+    if (t.includes('MAST_MONITORING') || (t.includes('MONITORING') && t.includes('MAST'))) return 'MAST';
+    if (t.includes('MAST_LIGHTNING') || t.includes('LIGHTNING_PROTECTION')) return 'MAST';
     if (t.includes('MAST')) return 'MAST';
     if (t.includes('CRANE')) return 'CRANE';
     if (t.includes('COOLING')) return 'COOLING TOWER';
@@ -174,6 +193,20 @@ function normalizeType(t) {
 const POLE_TYPES = new Set(['POLE / LINE','CABLE / ROPEWAY']);
 const MAX_H = { europe: 500, usa: 700, canada: 700, mexico: 500 };
 const MIN_POLE_H = 60; // filter poles/lines below this height
+
+// Manual height overrides for known structures missing h in OSM/ULC data
+// Key: "lat,lng" (rounded to 4dp) → height in meters AGL
+const H_OVERRIDES = {
+    '52.2287,21.0001': 310,   // Varso Tower, Warsaw
+    '52.2317,21.0060': 237,   // Palace of Culture and Science (PKiN), Warsaw
+    '52.5222,13.4050': 368,   // Fernsehturm Berlin
+    '48.8582,2.2945':  324,   // Eiffel Tower
+};
+function applyOverride(lat, lng, h) {
+    if (h !== null) return h;
+    const key = `${Math.round(lat*10000)/10000},${Math.round(lng*10000)/10000}`;
+    return H_OVERRIDES[key] !== undefined ? H_OVERRIDES[key] : h;
+}
 
 let allData=[], filtered=[], sortCol='h', sortDir=-1, currentPage=1;
 const PAGE_SIZE=250;
@@ -217,12 +250,23 @@ async function loadRegion(region) {
         const maxH = MAX_H[region] || 600;
 
         // Max heights per type to filter AMSL-misreported values
-        const TYPE_MAX_H = { 'ANTENNA': 250, 'OBS TOWER': 350, 'COMM MAST': 350, 'COMM TOWER': 400 };
+        const TYPE_MAX_H = { 'ANTENNA': 250, 'OBS TOWER': 400, 'COMM MAST': 650, 'COMM TOWER': 650 };
 
         allData = raw.map(d => {
-            const t = normalizeType(d.t || d.type || '');
+            const rawType = d.t || d.type || '';
+            const t = normalizeType(rawType);
             let h = d.h != null ? parseFloat(d.h) : null;
             if (isNaN(h)) h = null;
+
+            // For Polish ULC records where t contains the full object name,
+            // extract height from the type string if h is missing
+            if (h === null && d.country === 'PL') {
+                const extracted = extractPolishHeight(rawType.toUpperCase());
+                if (extracted !== null) h = extracted;
+            }
+
+            // Apply manual overrides for famous structures missing heights in source data
+            if (h === null && d.lat != null) h = applyOverride(d.lat, d.lng, h);
 
             const country = region === 'europe'
                 ? (COUNTRY_NAMES[d.country] || d.country || 'Unknown')
