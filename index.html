@@ -55,6 +55,14 @@
         .pg-btn { background:#1a1a1a;border:1px solid #333;border-radius:6px;color:#aaa;font-size:13px;padding:5px 14px;cursor:pointer; }
         .pg-btn:hover:not(:disabled){border-color:#555;color:#fff} .pg-btn:disabled{opacity:.3;cursor:default}
         .pg-info { color:var(--dim);font-size:13px; }
+        .modal-backdrop { position:fixed;inset:0;background:rgba(0,0,0,.68);z-index:200;display:none;align-items:center;justify-content:center;padding:20px; }
+        .modal-backdrop.active { display:flex; }
+        .modal { width:min(420px,100%);background:var(--panel);border:1px solid #333;border-radius:8px;padding:22px;color:var(--text);box-shadow:0 20px 60px rgba(0,0,0,.45); }
+        .modal h2 { margin:0 0 10px;font-size:18px;font-weight:600; }
+        .modal p { margin:0 0 18px;color:var(--dim);font-size:14px;line-height:1.5; }
+        .modal-actions { display:flex;justify-content:flex-end; }
+        .modal-btn { background:var(--accent);border:1px solid var(--accent);border-radius:6px;color:#fff;font-size:13px;font-weight:500;padding:7px 16px;cursor:pointer; }
+        .modal-btn:hover { filter:brightness(1.08); }
     </style>
 </head>
 <body>
@@ -96,6 +104,14 @@
         <button class="pg-btn" id="pg-prev">← prev</button>
         <span class="pg-info" id="pg-info"></span>
         <button class="pg-btn" id="pg-next">next →</button>
+    </div>
+</div>
+
+<div class="modal-backdrop" id="europe-warning" role="dialog" aria-modal="true" aria-labelledby="europe-warning-title">
+    <div class="modal">
+        <h2 id="europe-warning-title">Europe is still in progress</h2>
+        <p>This region is still being worked on, so use is currently limited. Some countries, heights, and duplicates may still be incomplete or under review.</p>
+        <div class="modal-actions"><button class="modal-btn" id="europe-warning-ok" type="button">OK</button></div>
     </div>
 </div>
 
@@ -191,7 +207,7 @@ function normalizeType(raw) {
 }
 
 const POLE_TYPES = new Set(['POLE / LINE','CABLE / ROPEWAY']);
-const MAX_H = { europe: 500, usa: 700, canada: 700, mexico: 500 };
+const MAX_H = { europe: 700, usa: 700, canada: 700, mexico: 500 };
 const MIN_POLE_H = 60; // filter poles/lines below this height
 
 // Manual height overrides for known structures missing h in OSM/ULC data
@@ -221,11 +237,30 @@ const typeFilter=document.getElementById('type-filter');
 const subregionFilter=document.getElementById('subregion-filter');
 const hideLinesCheck=document.getElementById('hide-lines-check');
 const hideUnknownCheck=document.getElementById('hide-unknown-check');
+const europeWarning=document.getElementById('europe-warning');
+const europeWarningOk=document.getElementById('europe-warning-ok');
+let europeWarningShown=false;
+
+function showEuropeWarning() {
+    if (europeWarningShown) return;
+    europeWarningShown=true;
+    europeWarning.classList.add('active');
+    europeWarningOk.focus();
+}
+
+function hideEuropeWarning() {
+    europeWarning.classList.remove('active');
+}
+
+europeWarningOk.addEventListener('click',hideEuropeWarning);
+europeWarning.addEventListener('click',e=>{ if(e.target===europeWarning) hideEuropeWarning(); });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape') hideEuropeWarning(); });
 
 document.querySelectorAll('.country-btn').forEach(btn => {
     btn.addEventListener('click', () => {
         document.querySelectorAll('.country-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
+        if (btn.dataset.region === 'europe') showEuropeWarning();
         loadRegion(btn.dataset.region);
     });
 });
