@@ -285,7 +285,7 @@ async function loadRegion(region) {
         const maxH = MAX_H[region] || 600;
 
         // Max heights per type to filter AMSL-misreported values
-        const TYPE_MAX_H = { 'ANTENNA': 250, 'OBS TOWER': 400, 'COMM MAST': 650, 'COMM TOWER': 650 };
+        const TYPE_MAX_H = { 'ANTENNA': 380, 'OBS TOWER': 400, 'COMM MAST': 650, 'COMM TOWER': 650 };
 
         allData = raw.map(d => {
             const rawType = d.t || d.type || '';

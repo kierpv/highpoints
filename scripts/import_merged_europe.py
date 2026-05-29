@@ -36,8 +36,100 @@ def parse_height(value):
     return round(height, 2) if height % 1 else int(height)
 
 
+def meters_from_feet(value):
+    height = parse_height(value)
+    if height is None:
+        return None
+    meters = float(height) * 0.3048
+    return round(meters, 1)
+
+
+def first_value(props, names):
+    for name in names:
+        value = props.get(name)
+        if value not in (None, ""):
+            return value
+    return None
+
+
+def parse_feature_height(props):
+    # Official obstacle datasets use AGL feet/meters fields; prefer those over
+    # OSM-style "height", which is sometimes polluted with elevation-like data.
+    official_meters = first_value(props, ["maxHeightAGL"])
+    if official_meters is not None:
+        return parse_height(official_meters), "official"
+
+    official_feet = first_value(props, ["HGT AGL (FT)", "height_FT", "valHgt (ft)"])
+    if official_feet is not None:
+        return meters_from_feet(official_feet), "official"
+
+    height = parse_height(props.get("height"))
+    if height is None:
+        return None, "unknown"
+    return height, "osm"
+
+
+def clean_type(value):
+    text = clean_text(value).upper()
+    return text.replace(" ", "_").replace("-", "_")
+
+
+def infer_type(props):
+    raw = first_value(props, ["type", "obstacleType", "txtDescrType", "TYPE", "Geometry type"])
+    text = clean_type(raw)
+    name = clean_type(first_value(props, ["name", "txtName"]))
+    combined = f"{text} {name}"
+
+    if any(token in combined for token in ("CHIMNEY", "STACK", "SMOKESTACK", "SCHORNSTEIN")):
+        return "CHIMNEY"
+    if any(token in combined for token in ("WIND_TURBINE", "WINDTURBINE", "WIND_TURB", "WINDMILL", "WINDKRAFT", "WINDENERGIE", "TURBINE")):
+        return "WIND_TURBINE"
+    if "COOLING" in combined:
+        return "COOLING_TOWER"
+    if "CRANE" in combined:
+        return "CRANE"
+    if "ANTENNA" in combined:
+        return "ANTENNA"
+    if "MAST" in combined and any(token in combined for token in ("COMM", "RADIO", "BROADCAST", "TELECOM", "FUNK", "SENDER")):
+        return "MAST_COMMUNICATION"
+    if "TOWER" in combined and any(token in combined for token in ("COMM", "RADIO", "BROADCAST", "TELECOM", "FUNK", "SENDER")):
+        return "TOWER_COMMUNICATION"
+    if "MAST" in combined:
+        return "MAST"
+    if "TOWER" in combined:
+        return "TOWER"
+    if "POLE" in combined or "PYLON" in combined or "LINE" in combined:
+        return "POLE"
+    return text or "OTHER"
+
+
+def keep_feature_height(record, source):
+    if record["h"] is None:
+        return True
+    if source == "official":
+        return True
+
+    # OSM-style telecom heights above this range are often polluted by AMSL,
+    # total object/elevation imports, or plain bad tags. Official obstacle
+    # fields, parsed above, are still kept.
+    if record["t"] in {"MAST_COMMUNICATION", "TOWER_COMMUNICATION", "MAST", "TOWER"}:
+        name = clean_type(record["n"])
+        is_named_transmitter = (
+            name.startswith("SENDER")
+            or name.startswith("SENDEMAST")
+            or "TRANSMITTER" in name
+            or "EMETTEUR" in name
+            or "ÉMETTEUR" in name
+            or "PYLONE" in name
+            or "PYLÔNE" in name
+        )
+        if record["h"] > 250 and not is_named_transmitter:
+            record["h"] = None
+    return True
+
+
 def normalize_record(record):
-    return {
+    row = {
         "n": clean_text(record.get("n") or record.get("name")) or "—",
         "t": clean_text(record.get("t") or record.get("type")).upper() or "OTHER",
         "h": parse_height(record.get("h") if "h" in record else record.get("height")),
@@ -46,12 +138,17 @@ def normalize_record(record):
         "city": clean_text(record.get("city")) or "—",
         "country": clean_text(record.get("country")),
     }
+    if row["t"] in {"MAST_COMMUNICATION", "TOWER_COMMUNICATION"} and row["h"] is not None and row["h"] > 350:
+        name = clean_type(row["n"])
+        if name in {"", "—"}:
+            row["h"] = None
+    return row
 
 
 def record_score(record):
     score = 0
     if record.get("h") is not None:
-        score += 10
+        score += 30 if record.get("_height_source") == "official" else 10
     if record.get("n") and record["n"] != "—":
         score += 5
     if record.get("city") and record["city"] != "—":
@@ -91,17 +188,20 @@ def feature_to_record(feature, country):
         lat = float(coords[1])
     except (TypeError, ValueError):
         return None
+    height, height_source = parse_feature_height(props)
     record = {
-        "n": clean_text(props.get("name")) or "—",
-        "t": clean_text(props.get("type")).upper() or "OTHER",
-        "h": parse_height(props.get("height")),
+        "n": clean_text(first_value(props, ["name", "txtName", "Designation"])) or "—",
+        "t": infer_type(props),
+        "h": height,
         "lat": round(lat, 7),
         "lng": round(lng, 7),
         "city": "—",
         "country": country,
+        "_height_source": height_source,
         "_operator": clean_text(props.get("operator")),
         "_osm_id": clean_text(props.get("osm_id")),
     }
+    keep_feature_height(record, height_source)
     return record
 
 
@@ -134,6 +234,7 @@ def dedupe(rows):
         deduped[key] = merge_richer(deduped[key], row) if key in deduped else row
     clean_rows = []
     for row in deduped.values():
+        row.pop("_height_source", None)
         row.pop("_operator", None)
         row.pop("_osm_id", None)
         clean_rows.append(row)
