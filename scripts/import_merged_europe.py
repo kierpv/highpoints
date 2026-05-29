@@ -15,6 +15,9 @@ MERGED_FILES = {
 }
 
 EUROPE_FILES = ["europe-1.json", "europe-2.json", "europe-3.json"]
+UMAP_COUNTRY_LAYERS = {
+    "CZ": [0],
+}
 
 
 def clean_text(value):
@@ -69,6 +72,13 @@ def parse_feature_height(props):
     return height, "osm"
 
 
+def parse_umap_height(props):
+    height = parse_height(props.get("height_m"))
+    if height is not None:
+        return height
+    return parse_height(props.get("height"))
+
+
 def clean_type(value):
     text = clean_text(value).upper()
     return text.replace(" ", "_").replace("-", "_")
@@ -107,6 +117,14 @@ def keep_feature_height(record, source):
     if record["h"] is None:
         return True
     if source == "official":
+        if record["country"] == "CH" and record["t"] in {
+            "POLE",
+            "CATENARY",
+            "CABLE_CAR",
+            "CABLE_ABOVE_VALLEY_BOTTOM",
+            "TRANSMISSION_LINE",
+        }:
+            record["h"] = None
         return True
 
     # OSM-style telecom heights above this range are often polluted by AMSL,
@@ -205,6 +223,29 @@ def feature_to_record(feature, country):
     return record
 
 
+def umap_feature_to_record(feature, country):
+    geometry = feature.get("geometry") or {}
+    coords = geometry.get("coordinates") or []
+    if geometry.get("type") != "Point" or len(coords) < 2:
+        return None
+    props = feature.get("properties") or {}
+    try:
+        lng = float(coords[0])
+        lat = float(coords[1])
+    except (TypeError, ValueError):
+        return None
+    return {
+        "n": clean_text(props.get("name")) or "—",
+        "t": infer_type(props),
+        "h": parse_umap_height(props),
+        "lat": round(lat, 7),
+        "lng": round(lng, 7),
+        "city": "—",
+        "country": country,
+        "_height_source": "umap",
+    }
+
+
 def load_existing_europe():
     rows = []
     for name in EUROPE_FILES:
@@ -220,6 +261,24 @@ def load_merged_geojson():
             data = json.loads(path.read_text(encoding="utf-8"))
             for feature in data.get("features", []):
                 row = feature_to_record(feature, country)
+                if row:
+                    rows.append(row)
+    return rows
+
+
+def load_umap_layers():
+    path = ROOT / "map.umap"
+    if not path.exists():
+        return []
+    data = json.loads(path.read_text(encoding="utf-8"))
+    layers = data.get("layers", [])
+    rows = []
+    for country, indexes in UMAP_COUNTRY_LAYERS.items():
+        for index in indexes:
+            if index >= len(layers):
+                continue
+            for feature in layers[index].get("features", []):
+                row = umap_feature_to_record(feature, country)
                 if row:
                     rows.append(row)
     return rows
@@ -265,15 +324,17 @@ def stats(rows):
 
 def main():
     existing = load_existing_europe()
-    replaced = set(MERGED_FILES)
+    replaced = set(MERGED_FILES) | set(UMAP_COUNTRY_LAYERS)
     kept_existing = [row for row in existing if row["country"] not in replaced]
     merged = load_merged_geojson()
-    final_rows = dedupe(kept_existing + merged)
+    umap_rows = load_umap_layers()
+    final_rows = dedupe(kept_existing + merged + umap_rows)
     write_split(final_rows)
 
     merged_stats = stats(final_rows)
     print(f"existing rows: {len(existing):,}")
     print(f"merged source rows: {len(merged):,}")
+    print(f"uMap source rows: {len(umap_rows):,}")
     print(f"final rows: {len(final_rows):,}")
     for country in sorted(replaced):
         item = merged_stats.get(country, {})

@@ -344,7 +344,7 @@ function applyFilters() {
     const hideUnknown=hideUnknownCheck.checked;
 
     filtered=allData.filter(d => {
-        if (hideLines && POLE_TYPES.has(d.t)) return false;
+        if (hideLines && !t && POLE_TYPES.has(d.t)) return false;
         if (hideUnknown && d.h === null) return false;
         if (t && d.t !== t) return false;
         if (sub && d.state !== sub) return false;
