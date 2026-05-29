@@ -19,6 +19,22 @@ UMAP_COUNTRY_LAYERS = {
     "CZ": [0],
 }
 
+CZ_COMMUNICATION_POLES = {
+    "BUKOVA HORA",
+    "JAVORICE",
+    "JILOVISTE",
+    "KLET",
+    "KOJAL",
+    "KOSETICE",
+    "KRASNE",
+    "KRASOV",
+    "LIBLICE",
+    "OSTRAVA",
+    "PARDUBICE",
+    "PRADED",
+    "PRAHA",
+}
+
 
 def clean_text(value):
     if value is None:
@@ -117,6 +133,12 @@ def keep_feature_height(record, source):
     if record["h"] is None:
         return True
     if source == "official":
+        if record["country"] == "FR" and record["t"] in {
+            "CABLE_CAR",
+            "CABLE_ABOVE_VALLEY_BOTTOM",
+            "CATENARY",
+        }:
+            record["h"] = None
         if record["country"] == "CH" and record["t"] in {
             "POLE",
             "CATENARY",
@@ -234,7 +256,7 @@ def umap_feature_to_record(feature, country):
         lat = float(coords[1])
     except (TypeError, ValueError):
         return None
-    return {
+    record = {
         "n": clean_text(props.get("name")) or "—",
         "t": infer_type(props),
         "h": parse_umap_height(props),
@@ -244,6 +266,9 @@ def umap_feature_to_record(feature, country):
         "country": country,
         "_height_source": "umap",
     }
+    if country == "CZ" and record["t"] == "POLE" and clean_text(record["n"]).upper() in CZ_COMMUNICATION_POLES:
+        record["t"] = "MAST_COMMUNICATION"
+    return record
 
 
 def load_existing_europe():
