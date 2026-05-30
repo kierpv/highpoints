@@ -241,6 +241,8 @@ def feature_to_record(feature, country):
         "_operator": clean_text(props.get("operator")),
         "_osm_id": clean_text(props.get("osm_id")),
     }
+    if country == "FR" and height_source == "official" and record["t"] == "POLE":
+        record["t"] = "MAST"
     keep_feature_height(record, height_source)
     return record
 
