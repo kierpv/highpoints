@@ -15,6 +15,7 @@ MERGED_FILES = {
 }
 
 EUROPE_FILES = ["europe-1.json", "europe-2.json", "europe-3.json"]
+UK_WIKIPEDIA_FILE = ROOT / "data" / "uk_tallest_structures_wikipedia.json"
 UMAP_COUNTRY_LAYERS = {
     "CZ": [0],
 }
@@ -188,7 +189,7 @@ def normalize_record(record):
 def record_score(record):
     score = 0
     if record.get("h") is not None:
-        score += 30 if record.get("_height_source") == "official" else 10
+        score += 35 if record.get("_height_source") == "wikipedia" else 30 if record.get("_height_source") == "official" else 10
     if record.get("n") and record["n"] != "—":
         score += 5
     if record.get("city") and record["city"] != "—":
@@ -273,6 +274,26 @@ def umap_feature_to_record(feature, country):
     return record
 
 
+def wikipedia_record_to_record(item):
+    lat = item.get("lat")
+    lng = item.get("lng")
+    if lat is None or lng is None:
+        return None
+    height = parse_height(item.get("height_m"))
+    if height is None:
+        return None
+    return {
+        "n": clean_text(item.get("name")) or "—",
+        "t": clean_text(item.get("type")).upper() or "OTHER",
+        "h": height,
+        "lat": round(float(lat), 7),
+        "lng": round(float(lng), 7),
+        "city": clean_text(item.get("town")) or "—",
+        "country": "GB",
+        "_height_source": "wikipedia",
+    }
+
+
 def load_existing_europe():
     rows = []
     for name in EUROPE_FILES:
@@ -308,6 +329,18 @@ def load_umap_layers():
                 row = umap_feature_to_record(feature, country)
                 if row:
                     rows.append(row)
+    return rows
+
+
+def load_uk_wikipedia():
+    if not UK_WIKIPEDIA_FILE.exists():
+        return []
+    data = json.loads(UK_WIKIPEDIA_FILE.read_text(encoding="utf-8"))
+    rows = []
+    for item in data:
+        row = wikipedia_record_to_record(item)
+        if row:
+            rows.append(row)
     return rows
 
 
@@ -355,13 +388,15 @@ def main():
     kept_existing = [row for row in existing if row["country"] not in replaced]
     merged = load_merged_geojson()
     umap_rows = load_umap_layers()
-    final_rows = dedupe(kept_existing + merged + umap_rows)
+    wikipedia_rows = load_uk_wikipedia()
+    final_rows = dedupe(kept_existing + merged + umap_rows + wikipedia_rows)
     write_split(final_rows)
 
     merged_stats = stats(final_rows)
     print(f"existing rows: {len(existing):,}")
     print(f"merged source rows: {len(merged):,}")
     print(f"uMap source rows: {len(umap_rows):,}")
+    print(f"Wikipedia source rows: {len(wikipedia_rows):,}")
     print(f"final rows: {len(final_rows):,}")
     for country in sorted(replaced):
         item = merged_stats.get(country, {})
